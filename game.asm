@@ -267,7 +267,98 @@ GOkeyPress:
 noGOKeyPress:
 	j gameOverLoop	
 
-#--------Functions below this line-----------
+##--------Functions below this line-----------##
+
+#--functions related to functionality of the ship--#
+
+#function responsible for updating the position of the ship, a0 = ship pos, a1 = key pressed
+updateShip:
+	beq $a1, w, respond_to_w # ASCII code of 'a' is 0x61 or 97 in decimal
+	beq $a1, a, respond_to_a
+	beq $a1, s, respond_to_s
+	beq $a1, d, respond_to_d
+
+	j endShipUpdate
+
+respond_to_w:
+	#set new position of ship
+	addi $a2, $a0, -128
+	#if ship not outside of range of screen update
+	li $a1, 128
+	ble $a2, $a1, endShipUpdate
+	la $a0, shipPos
+	sw $a2, 0($a0)
+	j endShipUpdate
+
+respond_to_a:
+	addi $a2, $a0, -4
+	#if ship not outside of range of screen update
+	li $a1, rightEdge
+	div $a2, $a1
+	mfhi $a1
+	blez $a1, endShipUpdate
+	la $a0, shipPos
+	sw $a2, 0($a0)
+	j endShipUpdate
+
+respond_to_s:
+	addi $a2, $a0, 128
+	li $a1, maxPix
+	subi $a1, $a1, 128
+	bge $a2, $a1, endShipUpdate
+	la $a0, shipPos
+	sw $a2, 0($a0)
+	j endShipUpdate
+	
+respond_to_d:
+	addi $a2, $a0, 4
+	li $a1, rightEdge
+	#if ship not aligned with right edge
+	div $a2, $a1
+	mfhi $a1
+	li $v1, 124
+	bge $a1, $v1, endShipUpdate
+	la $a0, shipPos
+	sw $a2, 0($a0)
+	j endShipUpdate
+	
+endShipUpdate:
+	jr $ra
+
+#function resets ship to default position
+resetShip:
+	li $a0, 2064
+	sw $a0, shipPos
+	jr $ra
+
+#function responsible for drawing the ship, a0 = ship pos
+drawShip:
+	
+	add $a0, $a0, $s0
+	lw $a1, Blue
+	sw $a1, 0($a0) # paint the first (top-left) unit red.
+	sw $a1, 4($a0)
+	lw $a1, Yellow
+	sw $a1, -128($a0) # paint the second unit on the first row green. Why $t0+4?
+	sw $a1, 128($a0) # paint the first unit on the second row blue. Why +128?
+	sw $a1, -132($a0)
+	sw $a1, 124($a0)
+	jr $ra
+
+#Function responsible for clearing ship from screen, a0 = shipPos
+clearShip:
+	add $a0, $a0, $s0
+	lw $v1, Black
+	sw $v1, 0($a0) # paint the first (top-left) unit red.
+	sw $v1, 4($a0)
+	sw $v1, -128($a0) # paint the second unit on the first row green. Why $t0+4?
+	sw $v1, 128($a0) # paint the first unit on the second row blue. Why +128?
+	sw $v1, -132($a0)
+	sw $v1, 124($a0)
+	jr $ra
+	
+
+#---functions related to functionality of Asteroids---#
 
 #initaties and asteroid, a0 = asteroidPos[i] a1 = asteroidSpeeds[i]
 initAst:
@@ -386,124 +477,84 @@ endUpdate:
 	sw $v0, 0($a2)
 	jr $ra
 
-#function responsible for updating the position of the ship, a0 = ship pos, a1 = key pressed
-updateShip:
-	beq $a1, w, respond_to_w # ASCII code of 'a' is 0x61 or 97 in decimal
-	beq $a1, a, respond_to_a
-	beq $a1, s, respond_to_s
-	beq $a1, d, respond_to_d
-
-	j endShipUpdate
-
-respond_to_w:
-	#set new position of ship
-	addi $a2, $a0, -128
-	#if ship not outside of range of screen update
-	li $a1, 128
-	ble $a2, $a1, endShipUpdate
-	la $a0, shipPos
-	sw $a2, 0($a0)
-	j endShipUpdate
-
-respond_to_a:
-	addi $a2, $a0, -4
-	#if ship not outside of range of screen update
-	li $a1, rightEdge
-	div $a2, $a1
-	mfhi $a1
-	blez $a1, endShipUpdate
-	la $a0, shipPos
-	sw $a2, 0($a0)
-	j endShipUpdate
-
-respond_to_s:
-	addi $a2, $a0, 128
-	li $a1, maxPix
-	subi $a1, $a1, 128
-	bge $a2, $a1, endShipUpdate
-	la $a0, shipPos
-	sw $a2, 0($a0)
-	j endShipUpdate
+#function responsible for checking if asteroid collided with ship, a0 = position of asteroid
+checkCollision:
+	#if position - 256 , position + 256, position -8 or position + 8 = ship, mark collision
+	lw $a1, shipPos
+	#check if in range on x axis (remainder of deivind by 128)
+	li $a2, rightEdge
+	#save ship's x in v1
+	div $a1, $a2
+	mfhi $v1
+	div $a0, $a2
+	mfhi $a2
+	#save asteroid's x in $a2
+	sub $a2, $v1, $a2 #find ship[x] - asteroid[x]
+	abs $a2, $a2
+	li $v1, 8
+	bgt $a2, $v1, noCollision
+	#do the same thing with y axis
 	
-respond_to_d:
-	addi $a2, $a0, 4
-	li $a1, rightEdge
-	#if ship not aligned with right edge
-	div $a2, $a1
-	mfhi $a1
-	li $v1, 124
-	bge $a1, $v1, endShipUpdate
-	la $a0, shipPos
-	sw $a2, 0($a0)
-	j endShipUpdate
+	lw $a1, shipPos
+	#check if in range on x axis (remainder of deivind by 128)
+	li $a2, rightEdge
+	#save ship's x in v1
+	div $a1, $a2
+	mflo $v1
+	div $a0, $a2
+	mflo $a2
+	#save asteroid's x in $a2
+	sub $a2, $v1, $a2 #find ship[y] - asteroid[y]
+	abs $a2, $a2
+	li $v1, 2
+	bgt $a2, $v1, noCollision
+	j Collision
 	
-endShipUpdate:
+noCollsion:
+	li $v0, 0
+	jr $ra
+Collision:
+	li $v0, 1
+	jr $ra
+	
+#function used to reset Asteroid Positions
+resetAsteroids:
+	addi $sp, $sp, -4
+	sw $ra 0($sp)
+	
+	lw $a0, asteroidNum
+	addi $a0, $a0, -1
+resetAstLoop:
+	bltz  $a0, exitResetAsLoop
+	#multiply i by 4 to get offset
+	li $a1, 4
+	mult $a0, $a1
+	mflo $a1
+	#get start of asteroid array
+	la $v0, asteroidPos
+	la $v1, asteroidSpeeds
+	add $v0, $a1, $v0
+	add $v1, $a1, $v1
+	
+	addi $sp, $sp, -4
+	sw $a0, 0($sp)
+	#move a+i to function arg
+	move $a0, $v0
+	move $a1, $v1
+	jal initAst
+	
+	lw $a0, 0($sp)
+	addi $sp, $sp, 4
+	
+	addi $a0, $a0, -1
+	j resetAstLoop
+	
+exitResetAsLoop:
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
 	jr $ra
 
-#function responisble for keeping track of score
-updateScore:
-	la $a0, Score
-	#load last digit of score see if its over 10
-checkOne:
-	lw $a1, 16($a0)
-	li $a2, 10
-	blt $a1, $a2, endCheck
-	div $a1, $a2
-	mfhi $a2
-	#load remainder of score / div into last digit
-	sw $a2 16($a0)
-	lw $a1, 12($a0)
-	addi $a1, $a1, 1
-	sw $a1, 12($a0)
-checkTen:
-	lw $a1, 12($a0)
-	li $a2, 10
-	blt $a1, $a2, endCheck
-	div $a1, $a2
-	mfhi $a2
-	#load remainder of score / div into last digit
-	sw $a2 12($a0)
-	lw $a1, 8($a0)
-	addi $a1, $a1, 1
-	sw $a1, 8($a0)
-checkHundred:
-	lw $a1, 8($a0)
-	li $a2, 10
-	blt $a1, $a2, endCheck
-	div $a1, $a2
-	mfhi $a2
-	#load remainder of score / div into last digit
-	sw $a2 8($a0)
-	lw $a1, 4($a0)
-	addi $a1, $a1, 1
-	sw $a1, 4($a0)
-checkThousand:
-	lw $a1, 4($a0)
-	li $a2, 10
-	blt $a1, $a2, endCheck
-	div $a1, $a2
-	mfhi $a2
-	#load remainder of score / div into last digit
-	sw $a2 4($a0)
-	lw $a1, 0($a0)
-	addi $a1, $a1, 1
-	sw $a1, 0($a0)
-endCheck:
-	jr $ra
 
-#function responsible for drawing the ship, a0 = ship pos
-drawShip:
-	
-	add $a0, $a0, $s0
-	lw $a1, Blue
-	sw $a1, 0($a0) # paint the first (top-left) unit red.
-	sw $a1, 4($a0)
-	lw $a1, Yellow
-	sw $a1, -128($a0) # paint the second unit on the first row green. Why $t0+4?
-	sw $a1, 128($a0) # paint the first unit on the second row blue. Why +128?
-	sw $a1, -132($a0)
-	sw $a1, 124($a0)
-	jr $ra
 #function responsible for drawing the asteroid, a0 = asteroidpos[i]
 drawAsteroid:
 	add $a0, $a0, $s0
@@ -514,9 +565,25 @@ drawAsteroid:
 	lw $a1, Grey
 	sw $a1, 128($a0)
 	sw $a1, 4($a0)
-	sw $a1, -128($a0)
+	sw $a1, -128($a0)	
+	jr $ra
+
+#Function responsible for clearing ship from screen, a0 = asteroid Pos
+clearAsteroid:
+	#a0 = positon of asteroid
+	add $a0, $a0, $s0
+	
+	lw $v1, Black
+	sw $v1, 0($a0)
+	sw $v1, -4($a0)
+	sw $v1, 128($a0)
+	sw $v1, 4($a0)
+	sw $v1, -128($a0)
 	
 	jr $ra
+
+
+#---Functions related to pickups---#
 
 #Managing Drawing and Clearing for HealthPickups, No Intended return values or Params
 drawPickupHealth:
@@ -559,7 +626,7 @@ HealthPickupCollision:
 	abs $v0, $v0
 	li $v1, 1
 	
-	ble $v0, $v1, HealthCollision
+	bgt $v0, $v1, HealthCollision
 	
 	#check if collided on x axis by modulus by rowsize and seeing if their difference is within 4
 	li $v0, rightEdge
@@ -629,7 +696,7 @@ ScorePickupCollision:
 	abs $v0, $v0
 	li $v1, 1
 	
-	ble $v0, $v1, ScoreCollision
+	bgt $v0, $v1, endScoreCollision
 	
 	#check if collided on x axis by modulus by rowsize and seeing if their difference is within 4
 	li $v0, rightEdge
@@ -713,31 +780,99 @@ spawnScore:
 endSpawn:
 	jr $ra
 
-#Function responsible for clearing ship from screen, a0 = shipPos
-clearShip:
-	add $a0, $a0, $s0
-	lw $v1, Black
-	sw $v1, 0($a0) # paint the first (top-left) unit red.
-	sw $v1, 4($a0)
-	sw $v1, -128($a0) # paint the second unit on the first row green. Why $t0+4?
-	sw $v1, 128($a0) # paint the first unit on the second row blue. Why +128?
-	sw $v1, -132($a0)
-	sw $v1, 124($a0)
+#--functions keeping track of score--#
+
+#function responisble for keeping track of score
+updateScore:
+	la $a0, Score
+	#load last digit of score see if its over 10
+checkOne:
+	lw $a1, 16($a0)
+	li $a2, 10
+	blt $a1, $a2, endCheck
+	div $a1, $a2
+	mfhi $a2
+	#load remainder of score / div into last digit
+	sw $a2 16($a0)
+	lw $a1, 12($a0)
+	addi $a1, $a1, 1
+	sw $a1, 12($a0)
+checkTen:
+	lw $a1, 12($a0)
+	li $a2, 10
+	blt $a1, $a2, endCheck
+	div $a1, $a2
+	mfhi $a2
+	#load remainder of score / div into last digit
+	sw $a2 12($a0)
+	lw $a1, 8($a0)
+	addi $a1, $a1, 1
+	sw $a1, 8($a0)
+checkHundred:
+	lw $a1, 8($a0)
+	li $a2, 10
+	blt $a1, $a2, endCheck
+	div $a1, $a2
+	mfhi $a2
+	#load remainder of score / div into last digit
+	sw $a2 8($a0)
+	lw $a1, 4($a0)
+	addi $a1, $a1, 1
+	sw $a1, 4($a0)
+checkThousand:
+	lw $a1, 4($a0)
+	li $a2, 10
+	blt $a1, $a2, endCheck
+	div $a1, $a2
+	mfhi $a2
+	#load remainder of score / div into last digit
+	sw $a2 4($a0)
+	lw $a1, 0($a0)
+	addi $a1, $a1, 1
+	sw $a1, 0($a0)
+endCheck:
 	jr $ra
 
-#Function responsible for clearing ship from screen, a0 = asteroid Pos
-clearAsteroid:
-	#a0 = positon of asteroid
-	add $a0, $a0, $s0
-	
-	lw $v1, Black
-	sw $v1, 0($a0)
-	sw $v1, -4($a0)
-	sw $v1, 128($a0)
-	sw $v1, 4($a0)
-	sw $v1, -128($a0)
-	
+#function used to reset score of ship
+resetScore:
+	la $a0, Score
+	li $a1, 0
+	sw $a1, 16($a0)
+	sw $a1, 12($a0)
+	sw $a1, 8($a0)
+	sw $a1, 4($a0)
+	sw $a1, 0($a0)
 	jr $ra
+
+#--functions used for keeping track of health--#
+#function responsible for drawing health of ship
+drawHealth:
+	lw $a0, Green
+	lw $a1, shipHealth
+	sw $a0, 0($s0)
+	li $a2, 2
+	blt $a1, $a2, end
+	sw $a0, 4($s0)
+	li $a2, 3
+	blt $a1, $a2, end
+	sw $a0, 8($s0)
+end:
+	jr $ra
+#function responsible for erasing health of ship
+clearHealth:
+	lw $a0, Black
+	sw $a0, 0($s0)
+	sw $a0, 4($s0)
+	sw $a0, 8($s0)
+	jr $ra
+
+#function used to reset health of ship
+resetHealth:
+	li $a0, 3
+	sw $a0, shipHealth
+	jr $ra
+
+#--general use functions--#
 
 #Function responsible for clearing all entities on screen (but not full screen)
 ClearScreen:
@@ -783,126 +918,22 @@ ClearExit:
 	#return to caller
 	jr $ra
 
-#function responsible for checking if asteroid collided with ship, a0 = position of asteroid
-checkCollision:
-	#if position - 256 , position + 256, position -8 or position + 8 = ship, mark collision
-	lw $a1, shipPos
-	#check if in range on x axis (remainder of deivind by 128)
-	li $a2, rightEdge
-	#save ship's x in v1
-	div $a1, $a2
-	mfhi $v1
-	div $a0, $a2
-	mfhi $a2
-	#save asteroid's x in $a2
-	sub $a2, $v1, $a2 #find ship[x] - asteroid[x]
-	abs $a2, $a2
-	li $v1, 8
-	bgt $a2, $v1, noCollision
-	#do the same thing with y axis
-	
-	lw $a1, shipPos
-	#check if in range on x axis (remainder of deivind by 128)
-	li $a2, rightEdge
-	#save ship's x in v1
-	div $a1, $a2
-	mflo $v1
-	div $a0, $a2
-	mflo $a2
-	#save asteroid's x in $a2
-	sub $a2, $v1, $a2 #find ship[y] - asteroid[y]
-	abs $a2, $a2
-	li $v1, 2
-	bgt $a2, $v1, noCollision
-	j Collision
-	
-noCollsion:
-	li $v0, 0
-	jr $ra
-Collision:
-	li $v0, 1
-	jr $ra
-
-#function resets ship to default position
-resetShip:
-	li $a0, 2064
-	sw $a0, shipPos
-	jr $ra
-
-#function responsible for drawing health of ship
-drawHealth:
-	lw $a0, Green
-	lw $a1, shipHealth
-	sw $a0, 0($s0)
-	li $a2, 2
-	blt $a1, $a2, end
-	sw $a0, 4($s0)
-	li $a2, 3
-	blt $a1, $a2, end
-	sw $a0, 8($s0)
-end:
-	jr $ra
-#function responsible for erasing health of ship
-clearHealth:
-	lw $a0, Black
-	sw $a0, 0($s0)
-	sw $a0, 4($s0)
-	sw $a0, 8($s0)
-	jr $ra
-
-#function used to reset health of ship
-resetHealth:
-	li $a0, 3
-	sw $a0, shipHealth
-	jr $ra
-
-#function used to reset score of ship
-resetScore:
-	la $a0, Score
+#function responsible for fully clearing screen
+fullClear:
+	move $a0, $s0
 	li $a1, 0
-	sw $a1, 16($a0)
-	sw $a1, 12($a0)
-	sw $a1, 8($a0)
-	sw $a1, 4($a0)
-	sw $a1, 0($a0)
+	lw $a2, Black
+fullClearLoop:
+	bge $a1, maxPix, endFullLoop
+	
+	sw $a2, 0($a0)
+	addi $a0, $a0, 4
+	addi $a1, $a1, 4
+	j fullClearLoop
+endFullLoop:
 	jr $ra
 
-#function used to reset Asteroid Positions of Ship
-resetAsteroids:
-	addi $sp, $sp, -4
-	sw $ra 0($sp)
-	
-	lw $a0, asteroidNum
-	addi $a0, $a0, -1
-resetAstLoop:
-	bltz  $a0, exitResetAsLoop
-	#multiply i by 4 to get offset
-	li $a1, 4
-	mult $a0, $a1
-	mflo $a1
-	#get start of asteroid array
-	la $v0, asteroidPos
-	la $v1, asteroidSpeeds
-	add $v0, $a1, $v0
-	add $v1, $a1, $v1
-	
-	addi $sp, $sp, -4
-	sw $a0, 0($sp)
-	#move a+i to function arg
-	move $a0, $v0
-	move $a1, $v1
-	jal initAst
-	
-	lw $a0, 0($sp)
-	addi $sp, $sp, 4
-	
-	addi $a0, $a0, -1
-	j resetAstLoop
-	
-exitResetAsLoop:
-	lw $ra, 0($sp)
-	addi $sp, $sp, 4
-	jr $ra
+#--functions called when game over happens--#
 
 #function responsible for drawing game over screen (except score)
 drawGameOver:
@@ -1185,20 +1216,5 @@ drawNine:
 	sw $a2, -260($a0)
 	sw $a2, -256($a0)
 	sw $a2, -252($a0)
-	jr $ra
-
-#function responsible for fully clearing screen
-fullClear:
-	move $a0, $s0
-	li $a1, 0
-	lw $a2, Black
-fullClearLoop:
-	bge $a1, maxPix, endFullLoop
-	
-	sw $a2, 0($a0)
-	addi $a0, $a0, 4
-	addi $a1, $a1, 4
-	j fullClearLoop
-endFullLoop:
 	jr $ra
 	
