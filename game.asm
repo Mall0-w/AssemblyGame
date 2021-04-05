@@ -14,24 +14,24 @@
 #
 # Which milestones have been reached in this submission?
 # (See the assignment handout for descriptions of the milestones)
-# - Milestone 1/2/3/4 (choose the one the applies)
+# - Milestone 4 (choose the one the applies)
 #
 # Which approved features have been implemented for milestone 4?
 # (See the assignment handout for the list of additional features)
-# 1. (fill in the feature, if any)
-# 2. (fill in the feature, if any)
-# 3. (fill in the feature, if any)
+# 1. b. Increase in difficulty as game progresses.
+# 2. c. Scoring system: add a score to the game based on survival time, near misses, or any idea you may have
+# 3. Add “pick-ups” that the ship can pick up
 # ... (add more if necessary)
 #
 # Link to video demonstration for final submission:
 # - (insert YouTube / MyMedia / other URL here). Make sure we can view it!
 #
 # Are you OK with us sharing the video with people outside course staff?
-# - yes / no / yes, and please share this project github link as well!
+# yes, (need an email/user name to send gitHub page to because directory is private)
 #
 # Any additional information that the TA needs to know:
 # - (write here, if any)
-#
+# I only started uploading to gitHub when i was mostly done the assignment
 #####################################################################
 
 
@@ -48,11 +48,13 @@
 .eqv rightEdge 128
 .eqv rowSize 128
 .eqv maxPix 4092
+.eqv randPixCap 1023
 .eqv w 119
 .eqv a 97
 .eqv s 115
 .eqv d 100
 .eqv p 112
+.eqv pickupSpawnOdds 100 #pickups have a 1/pickupSpawnOdds chance of spawning every tick
 .data
 #variable data for colours
 Yellow: .word 0xffff00
@@ -63,6 +65,8 @@ Brown: .word 0x492623
 Red: .word 0xff0000
 Black: .word 0x000000
 White: .word 0xffffff
+Magenta: .word 0xa20067
+Cyan: .word 0x2aebef
 #variable for position of ship on screen
 shipPos: .word  2064
 #variable for number of asteroids on screen
@@ -77,12 +81,18 @@ shipHealth: .word 3
 size: .word 3096
 Score: .word 0:5
 
+HealthPickupPos: .word -1
+ScorePickupPos: .word -1
 
 .text
 .globl main
 main:
 
 init:	
+	#reset pickup positions
+	li $a0, -1
+	sw $a0, HealthPickupPos
+	sw $a0, ScorePickupPos
 	li $t0, 2
 	sw $t0, speedCap
 	sw $t0, asteroidNum
@@ -103,7 +113,6 @@ init:
 	#sw $t0, 0($s0)
 	#set ship pos to predetermined spot
 	jal fullClear
-	
 	jal resetAsteroids
 	
 	#draw pixels relevant to ship
@@ -182,6 +191,18 @@ noCollision:
 	j aLoop
 
 exitAst:
+
+checkPickups:
+	jal HealthPickupCollision
+	jal ScorePickupCollision
+
+checkPickupSpawns:
+	jal spawnPickups
+
+drawPickups:
+	jal drawPickupHealth
+	jal drawPickupScore
+
 manageHealth:
 	lw $a0, shipHealth
 	blez $a0, gameOver
@@ -248,11 +269,8 @@ noGOKeyPress:
 
 #--------Functions below this line-----------
 
+#initaties and asteroid, a0 = asteroidPos[i] a1 = asteroidSpeeds[i]
 initAst:
-	#parameters: pos[i], speeds[i]
-	#move address to asteroid to v1
-	#a0 = pos
-	#a1 = speed
 	addi $sp, $sp, -4
 	sw $a1, 0($sp)
 	addi $sp, $sp, -4
@@ -293,7 +311,8 @@ initAst:
 	
 	#return to caller
 	jr $ra
-	
+
+#function responsible for updating the position of an asteroid where a0 = asteroidPos[i]	
 updateAsteroid:
 	#a0 = offset to arrays
 	#load array for asteroid speeds and positions
@@ -344,10 +363,6 @@ updateAsteroid:
 	
 	#if y coord of new position is equal to that of y positon then wrap around hasnt occured
 	beq $a0, $v1, endUpdate
-	
-	#NOTE NEED TO KEEP A2 = ASTEROID POS ADDRESS
-	#NEED TO KEEP A1 = SPEED ADDRESS
-	#NEED v0 TO STORE NEW ADDRESS OF ASTEROID
 resetA:	
 	#store old return address
 	addi $sp, $sp, -4
@@ -371,8 +386,8 @@ endUpdate:
 	sw $v0, 0($a2)
 	jr $ra
 
+#function responsible for updating the position of the ship, a0 = ship pos, a1 = key pressed
 updateShip:
-	#$a0 = ship pos, $a1 = key pressed
 	beq $a1, w, respond_to_w # ASCII code of 'a' is 0x61 or 97 in decimal
 	beq $a1, a, respond_to_a
 	beq $a1, s, respond_to_s
@@ -425,6 +440,7 @@ respond_to_d:
 endShipUpdate:
 	jr $ra
 
+#function responisble for keeping track of score
 updateScore:
 	la $a0, Score
 	#load last digit of score see if its over 10
@@ -475,6 +491,7 @@ checkThousand:
 endCheck:
 	jr $ra
 
+#function responsible for drawing the ship, a0 = ship pos
 drawShip:
 	
 	add $a0, $a0, $s0
@@ -487,7 +504,7 @@ drawShip:
 	sw $a1, -132($a0)
 	sw $a1, 124($a0)
 	jr $ra
-
+#function responsible for drawing the asteroid, a0 = asteroidpos[i]
 drawAsteroid:
 	add $a0, $a0, $s0
 	
@@ -501,6 +518,202 @@ drawAsteroid:
 	
 	jr $ra
 
+#Managing Drawing and Clearing for HealthPickups, No Intended return values or Params
+drawPickupHealth:
+	lw $a0, HealthPickupPos
+	blez $a0, endDrawHealthPickup
+	add $a0, $a0, $s0
+	lw $a1, Magenta
+	sw $a1, 0($a0)
+
+endDrawHealthPickup:
+	jr $ra
+
+clearPickupHealth:
+	lw $a0, HealthPickupPos
+	blez $a0, endClearHealthPickup
+	add $a0, $a0, $s0
+	lw $a1, Black
+	sw $a1, 0($a0)
+
+endClearHealthPickup:
+	jr $ra
+	
+#function that sees if ship has collided with health pickup
+HealthPickupCollision:
+	lw $a0, shipPos
+	lw $a1, HealthPickupPos
+	#check if pickup has been spawned, if not end collision logic
+	blez $a1, endHealthCollision
+	#if pickup is within 1 on the x or y axis then it has collided with ship
+	#check if collided on y axis by divining by rowsize and seeing if their difference is within 1
+	li $v0, rightEdge
+	div $a1, $v0
+	mflo $v0
+	
+	li $v1, rightEdge
+	div $a0, $v1
+	mflo $v1
+	
+	sub $v0, $v1, $v0
+	abs $v0, $v0
+	li $v1, 1
+	
+	ble $v0, $v1, HealthCollision
+	
+	#check if collided on x axis by modulus by rowsize and seeing if their difference is within 4
+	li $v0, rightEdge
+	div $a1, $v0
+	mfhi $v0
+	
+	li $v1, rightEdge
+	div $a0, $v1
+	mfhi $v1
+	
+	sub $v0, $v1, $v0
+	abs $v0, $v0
+	li $v1, 4
+	ble $v0, $v1, HealthCollision
+	#if neither condiitons we met, end collision logic
+	j endHealthCollision
+HealthCollision:
+	#if collided, despawn healthpickup and reset health
+	li $a0, -1
+	sw $a0, HealthPickupPos
+	addi $sp, $sp, -4
+	sw $ra , 0($sp)
+	jal resetHealth
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+endHealthCollision:
+	jr $ra
+
+#Managing Drawing and Clearing for Score Pickups, No Intended return values or Params
+drawPickupScore:
+	lw $a0, ScorePickupPos
+	blez $a0, endDrawScorePickup
+	add $a0, $a0, $s0
+	lw $a1, Cyan
+	sw $a1, 0($a0)
+
+endDrawScorePickup:
+	jr $ra
+
+clearPickupScore:
+	lw $a0, ScorePickupPos
+	blez $a0, endClearScorePickup
+	add $a0, $a0, $s0
+	lw $a1, Black
+	sw $a1, 0($a0)
+
+endClearScorePickup:
+	jr $ra
+
+#function that sees if ship has collided with score pickup
+ScorePickupCollision:
+	lw $a0, shipPos
+	lw $a1, ScorePickupPos
+	#check if pickup has been spawned, if not end collision logic
+	blez $a1, endScoreCollision
+	#if pickup is within 1 on the x or y axis then it has collided with ship
+	#check if collided on y axis by divining by rowsize and seeing if their difference is within 1
+	li $v0, rightEdge
+	div $a1, $v0
+	mflo $v0
+	
+	li $v1, rightEdge
+	div $a0, $v1
+	mflo $v1
+	
+	sub $v0, $v1, $v0
+	abs $v0, $v0
+	li $v1, 1
+	
+	ble $v0, $v1, ScoreCollision
+	
+	#check if collided on x axis by modulus by rowsize and seeing if their difference is within 4
+	li $v0, rightEdge
+	div $a1, $v0
+	mfhi $v0
+	
+	li $v1, rightEdge
+	div $a0, $v1
+	mfhi $v1
+	
+	sub $v0, $v1, $v0
+	abs $v0, $v0
+	li $v1, 4
+	ble $v0, $v1, ScoreCollision
+	#if neither condiitons we met, end collision logic
+	j endScoreCollision
+ScoreCollision:
+	#if collided, despawn healthpickup and reset health
+	li $a0, -1
+	sw $a0, ScorePickupPos
+	#add 5 points to the score
+	la $a1, Score
+	li $a0, 5
+	lw $a2, 16($a1)
+	add $a0, $a0, $a2
+	
+	sw $a0, 16($a1)
+	
+endScoreCollision:
+	jr $ra
+
+#function responsible for spawning pickups
+spawnPickups:
+	#if health hasnt been spawned yet
+	lw $a0, HealthPickupPos
+	bgtz $a0, spawnScore
+	#randomly spawn health
+	li $v0, 42
+	li $a0, 0
+	li $a1, pickupSpawnOdds
+	syscall
+	#if random number != 1 then move to trying to spawn score
+	li $a2, 1
+	bne $a0, $a2 spawnScore
+	#if hit random chance choose a random pixel on screen and set its position to that
+	li $v0, 42
+	li $a0, 0
+	li $a1, randPixCap
+	syscall
+	
+	li $a2, 4
+	mult $a0, $a2
+	mflo $a0
+	
+	la $a1, HealthPickupPos
+	sw $a0, 0($a1)
+spawnScore:
+	#if score has not been spawned yet
+	lw $a0, ScorePickupPos
+	bgtz $a0, endSpawn
+	#randomly spawn score
+	li $v0, 42
+	li $a0, 0
+	li $a1, pickupSpawnOdds
+	syscall
+	#if random number != 1 then move to trying to spawn score
+	li $a2, 1
+	bne $a0, $a2 endSpawn
+	#if hit random chance choose a random pixel on screen and set its position to that
+	li $v0, 42
+	li $a0, 0
+	li $a1, randPixCap
+	syscall
+	
+	li $a2, 4
+	mult $a0, $a2
+	mflo $a0
+	
+	la $a1, ScorePickupPos
+	sw $a0, 0($a1)
+endSpawn:
+	jr $ra
+
+#Function responsible for clearing ship from screen, a0 = shipPos
 clearShip:
 	add $a0, $a0, $s0
 	lw $v1, Black
@@ -512,6 +725,7 @@ clearShip:
 	sw $v1, 124($a0)
 	jr $ra
 
+#Function responsible for clearing ship from screen, a0 = asteroid Pos
 clearAsteroid:
 	#a0 = positon of asteroid
 	add $a0, $a0, $s0
@@ -525,6 +739,7 @@ clearAsteroid:
 	
 	jr $ra
 
+#Function responsible for clearing all entities on screen (but not full screen)
 ClearScreen:
 	#push return address onto stack
 	addi $sp, $sp, -4
@@ -559,6 +774,8 @@ ClearExit:
 	
 	jal clearHealth
 	
+	jal clearPickupHealth
+	jal clearPickupScore
 	#load return address from bottom of stack
 	lw $ra, 0($sp)
 	addi $sp, $sp, 4
@@ -566,8 +783,8 @@ ClearExit:
 	#return to caller
 	jr $ra
 
+#function responsible for checking if asteroid collided with ship, a0 = position of asteroid
 checkCollision:
-	#given coordinates of asteroid in a0
 	#if position - 256 , position + 256, position -8 or position + 8 = ship, mark collision
 	lw $a1, shipPos
 	#check if in range on x axis (remainder of deivind by 128)
@@ -606,11 +823,13 @@ Collision:
 	li $v0, 1
 	jr $ra
 
+#function resets ship to default position
 resetShip:
 	li $a0, 2064
 	sw $a0, shipPos
 	jr $ra
 
+#function responsible for drawing health of ship
 drawHealth:
 	lw $a0, Green
 	lw $a1, shipHealth
@@ -623,7 +842,7 @@ drawHealth:
 	sw $a0, 8($s0)
 end:
 	jr $ra
-
+#function responsible for erasing health of ship
 clearHealth:
 	lw $a0, Black
 	sw $a0, 0($s0)
@@ -631,11 +850,13 @@ clearHealth:
 	sw $a0, 8($s0)
 	jr $ra
 
+#function used to reset health of ship
 resetHealth:
 	li $a0, 3
 	sw $a0, shipHealth
 	jr $ra
 
+#function used to reset score of ship
 resetScore:
 	la $a0, Score
 	li $a1, 0
@@ -646,6 +867,7 @@ resetScore:
 	sw $a1, 0($a0)
 	jr $ra
 
+#function used to reset Asteroid Positions of Ship
 resetAsteroids:
 	addi $sp, $sp, -4
 	sw $ra 0($sp)
@@ -682,6 +904,7 @@ exitResetAsLoop:
 	addi $sp, $sp, 4
 	jr $ra
 
+#function responsible for drawing game over screen (except score)
 drawGameOver:
 	lw $a0, White
 	move $a1, $s0
@@ -767,6 +990,7 @@ drawGameOver:
 	
 	jr $ra
 
+#function responsible for drawing score on game over screen
 drawScore:
 	#get seconds survived
 	addi $sp, $sp, -4
@@ -801,23 +1025,9 @@ drawScore:
 	addi $sp, $sp, 4
 	
 	jr $ra
-fullClear:
-	move $a0, $s0
-	li $a1, 0
-	lw $a2, Black
-fullClearLoop:
-	bge $a1, maxPix, endFullLoop
-	
-	sw $a2, 0($a0)
-	addi $a0, $a0, 4
-	addi $a1, $a1, 4
-	j fullClearLoop
-endFullLoop:
-	jr $ra
 
+#function responsible for drawing a number, a0 = coordinate of center of number, a1 = the number (0-9)
 drawNumber:
-	#a0 is draw position
-	#a1 is letter
 	
 	lw $a2, White
 	
@@ -975,5 +1185,20 @@ drawNine:
 	sw $a2, -260($a0)
 	sw $a2, -256($a0)
 	sw $a2, -252($a0)
+	jr $ra
+
+#function responsible for fully clearing screen
+fullClear:
+	move $a0, $s0
+	li $a1, 0
+	lw $a2, Black
+fullClearLoop:
+	bge $a1, maxPix, endFullLoop
+	
+	sw $a2, 0($a0)
+	addi $a0, $a0, 4
+	addi $a1, $a1, 4
+	j fullClearLoop
+endFullLoop:
 	jr $ra
 	
