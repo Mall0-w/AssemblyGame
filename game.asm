@@ -331,14 +331,42 @@ updateAsteroid:
 	#update position by subtracting speed
 	sub $v0, $v0, $a0
 	
-	 
+	addi $sp, $sp, -4
+	sw $v0, 0($sp)
+	
+	#get y coord of new position by dividing by row size
+	#add offset of -4 to prevent screen wrap
+	addi $v0, $v0, -4
 	li $v1, rowSize
 	div $v0, $v1
-	mfhi $v1
-	#see if asteroid is about to go off the top of the screen (possible with faster speeds)
-	bltz $v0, resetA
-	#see if position has hit end of screen
-	bgtz $v1, endUpdate
+	mflo $v1
+	
+	#save said y coordinate
+	addi $sp, $sp, -4
+	sw $v1, 0($sp)
+	
+	#get y coordinate of current position
+	lw $v0, 0($a2)
+	#add offset of -4 to prevent screen wraping
+	addi $v0, $v0, -4
+	li $v1, rowSize
+	div $v0, $v1
+	mflo $v1
+	
+	#get back y coordinate of new position
+	lw $a0, 0($sp)
+	addi $sp, $sp, 4
+	
+	#get back former new position
+	lw $v0, 0($sp)
+	addi $sp, $sp, 4
+	
+	#if y coord of new position is equal to that of y positon then wrap around hasnt occured
+	beq $a0, $v1, endUpdate
+	
+	#NOTE NEED TO KEEP A2 = ASTEROID POS ADDRESS
+	#NEED TO KEEP A1 = SPEED ADDRESS
+	#NEED v0 TO STORE NEW ADDRESS OF ASTEROID
 resetA:	
 	#store old return address
 	addi $sp, $sp, -4
