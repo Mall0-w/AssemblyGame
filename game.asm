@@ -104,29 +104,7 @@ init:
 	#set ship pos to predetermined spot
 	jal fullClear
 	
-	lw $t0, asteroidNum
-	addi $t0, $t0, -1
-initAstLoop:
-	bltz  $t0, exitInitAsLoop
-	#multiply i by 4 to get offset
-	li $t1, 4
-	mult $t0, $t1
-	mflo $t1
-	#get start of asteroid array
-	la $t2, asteroidPos
-	la $t3, asteroidSpeeds
-	add $t2, $t1, $t2
-	add $t3, $t1, $t3
-	
-	#move a+i to function arg
-	move $a0, $t2
-	move $a1, $t3
-	jal initAst
-	
-	addi $t0, $t0, -1
-	j initAstLoop
-	#go through first three asteriods and update their positions
-exitInitAsLoop:	
+	jal resetAsteroids
 	
 	#draw pixels relevant to ship
 	
@@ -189,6 +167,9 @@ aLoop:  bltz $t0, exitAst
 	lw $t9, shipHealth
 	addi $t9, $t9, -1
 	sw $t9, shipHealth
+	
+	jal fullClear
+	jal resetAsteroids
 	
 noCollision:	
 	lw $a0, 0($t1)
@@ -664,7 +645,43 @@ resetScore:
 	sw $a1, 4($a0)
 	sw $a1, 0($a0)
 	jr $ra
+
+resetAsteroids:
+	addi $sp, $sp, -4
+	sw $ra 0($sp)
 	
+	lw $a0, asteroidNum
+	addi $a0, $a0, -1
+resetAstLoop:
+	bltz  $a0, exitResetAsLoop
+	#multiply i by 4 to get offset
+	li $a1, 4
+	mult $a0, $a1
+	mflo $a1
+	#get start of asteroid array
+	la $v0, asteroidPos
+	la $v1, asteroidSpeeds
+	add $v0, $a1, $v0
+	add $v1, $a1, $v1
+	
+	addi $sp, $sp, -4
+	sw $a0, 0($sp)
+	#move a+i to function arg
+	move $a0, $v0
+	move $a1, $v1
+	jal initAst
+	
+	lw $a0, 0($sp)
+	addi $sp, $sp, 4
+	
+	addi $a0, $a0, -1
+	j resetAstLoop
+	
+exitResetAsLoop:
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+	jr $ra
+
 drawGameOver:
 	lw $a0, White
 	move $a1, $s0
