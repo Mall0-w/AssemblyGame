@@ -54,10 +54,12 @@
 .eqv s 115
 .eqv d 100
 .eqv p 112
-.eqv pickupSpawnOdds 100 #pickups have a 1/pickupSpawnOdds chance of spawning every tick
+.eqv pickupSpawnOdds 1000 #pickups have a 1/pickupSpawnOdds chance of spawning every tick
 .eqv updateRate 40
 .eqv maxSpeed 2
 .eqv maxAst 5
+.eqv startSpeed 1
+.eqv startAstNum 1
 .data
 #variable data for colours
 Yellow: .word 0xffff00
@@ -84,6 +86,7 @@ shipHealth: .word 3
 size: .word 3096
 Score: .word 0:5
 
+hit: .word 0
 
 HealthPickupPos: .word -1
 ScorePickupPos: .word -1
@@ -97,14 +100,19 @@ init:
 	li $a0, -1
 	sw $a0, HealthPickupPos
 	sw $a0, ScorePickupPos
-	li $t0, 2
+	li $t0, startSpeed
 	sw $t0, speedCap
+	li $t0, startAstNum
 	sw $t0, asteroidNum
 	li $s1, rightEdge
 	li $s0, BASE_ADDRESS # $t0 stores the base address for display
 	li $t1, 0xff0000 # $t1 stores the red colour code
 	li $t2, 0x00ff00 # $t2 stores the green colour code
 	li $t3, 0x0000ff # $t3 stores the blue colour code
+	
+	#resetting hit detection
+	li $t0, 0
+	sw $t0, hit
 	
 	li $s2, 0 #register for number of ticks passed
 	#resettting ship pos
@@ -134,8 +142,7 @@ loop:
 clear:
 	jal ClearScreen	
 	
-	lw $t0, asteroidNum
-	addi $t0, $t0, -1
+	
 
 checkInput:
 	#check to see if key was pressed
@@ -159,6 +166,10 @@ noKeyPress:
 	
 	#go through each entry in Asteroid array
 	#update then draw asteroid
+	
+	lw $t0, asteroidNum
+	addi $t0, $t0, -1
+	
 aLoop:  bltz $t0, exitAst
 	#mult i by 4 to get offset in Asteroid array
 	li $t3, 4
@@ -183,6 +194,9 @@ aLoop:  bltz $t0, exitAst
 	
 	jal fullClear
 	jal resetAsteroids
+	
+	li $t3, 1
+	sw $t3, hit
 	
 noCollision:	
 	lw $a0, 0($t1)
@@ -215,6 +229,7 @@ manageHealth:
 	#draw ship
 	lw $a0, shipPos
 	jal drawShip
+	jal drawHit
 
 checkDifficulty:
 	#if 10 seconds have passed (10,000 ms)
@@ -351,6 +366,41 @@ drawShip:
 	sw $a1, 128($a0) # paint the first unit on the second row blue. Why +128?
 	sw $a1, -132($a0)
 	sw $a1, 124($a0)
+	jr $ra
+
+#function responsivle for drawing the ship being hit
+drawHit:
+	lw $a0, hit
+	beqz $a0 endDrawHit
+	lw $a0, shipPos
+	lw $a1, Red
+	
+	add $a0, $a0, $s0
+	
+	sw $a1, 0($a0)
+	sw $a1, 132($a0)
+	sw $a1, 124($a0)
+	sw $a1, -132($a0)
+	sw $a1, -124($a0)
+	
+	li $a0, 0
+	sw $a0, hit
+endDrawHit:	
+	jr $ra
+
+#function responsible for clearing the ship being hit
+clearHit:
+	lw $a0, shipPos
+	lw $a1, Black
+	
+	add $a0, $a0, $s0
+	
+	sw $a1, 0($a0)
+	sw $a1, 132($a0)
+	sw $a1, 124($a0)
+	sw $a1, -132($a0)
+	sw $a1, -124($a0)
+	
 	jr $ra
 
 #Function responsible for clearing ship from screen, a0 = shipPos
@@ -725,13 +775,12 @@ ScoreCollision:
 	#if collided, despawn healthpickup and reset health
 	li $a0, -1
 	sw $a0, ScorePickupPos
-	#add 5 points to the score
+	#add 100 points to the score
 	la $a1, Score
-	li $a0, 5
-	lw $a2, 16($a1)
-	add $a0, $a0, $a2
+	lw $a2, 8($a1)
+	addi $a2, $a2, 1
 	
-	sw $a0, 16($a1)
+	sw $a2, 8($a1)
 	
 endScoreCollision:
 	jr $ra
@@ -919,6 +968,8 @@ ClearExit:
 	
 	jal clearPickupHealth
 	jal clearPickupScore
+	
+	jal clearHit
 	#load return address from bottom of stack
 	lw $ra, 0($sp)
 	addi $sp, $sp, 4
