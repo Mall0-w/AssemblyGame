@@ -96,7 +96,7 @@ ScorePickupPos: .word -1
 main:
 
 init:	
-	#reset pickup positions
+	#reset important positions, variables
 	li $a0, -1
 	sw $a0, HealthPickupPos
 	sw $a0, ScorePickupPos
@@ -106,29 +106,22 @@ init:
 	sw $t0, asteroidNum
 	li $s1, rightEdge
 	li $s0, BASE_ADDRESS # $t0 stores the base address for display
-	li $t1, 0xff0000 # $t1 stores the red colour code
-	li $t2, 0x00ff00 # $t2 stores the green colour code
-	li $t3, 0x0000ff # $t3 stores the blue colour code
+	
 	
 	#resetting hit detection
 	li $t0, 0
 	sw $t0, hit
 	
 	li $s2, 0 #register for number of ticks passed
-	#resettting ship pos
+	#resettting other vaiables
 	jal resetShip 
 	jal resetHealth
 	jal resetScore
-	#sw $t1, 4092($s0)
-	#set base ship position
-	#2064 is perferred start offset
-	#sw $t0, 0($s0)
-	#set ship pos to predetermined spot
 	jal fullClear
 	jal resetAsteroids
 	
-	#draw pixels relevant to ship
 	
+	#enter main loop for screen
 loop:
 	#intended order:
 	#erase
@@ -140,6 +133,7 @@ loop:
 	
 	addi $s2, $s2, 1 #one tick has passed	
 clear:
+	#erase all screen entities (not full screen)
 	jal ClearScreen	
 	
 	
@@ -209,18 +203,22 @@ noCollision:
 	j aLoop
 
 exitAst:
-
+	
+	#check if ship has collided with any asteroids
 checkPickups:
 	jal HealthPickupCollision
 	jal ScorePickupCollision
-
+	
+	#try to spawn pickups
 checkPickupSpawns:
 	jal spawnPickups
-
+	
+	#draw pickups (function itself covers whether or not they have spawned)
 drawPickups:
 	jal drawPickupHealth
 	jal drawPickupScore
-
+	
+	#manage health of ship
 manageHealth:
 	lw $a0, shipHealth
 	blez $a0, gameOver
@@ -231,6 +229,7 @@ manageHealth:
 	jal drawShip
 	jal drawHit
 
+#check to see if difficulty should be increased
 checkDifficulty:
 	#if 10 seconds have passed (10,000 ms)
 	li $t8, 10000
@@ -239,6 +238,7 @@ checkDifficulty:
 	mflo $t7
 	ble $t7, $t8, endIncrease
 
+#increase difficulty by spawning more asteroids / increasing potential speed
 increaseDifficulty:
 	li $s2, 0
 	lw $t8, speedCap
@@ -255,6 +255,7 @@ endIncreaseSpeed:
 	sw $t9, asteroidNum
 endIncrease:
 
+#increase score
 increaseScore:
 	la $a0, Score
 	lw $a1, 16($a0)
