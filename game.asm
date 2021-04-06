@@ -24,7 +24,7 @@
 # ... (add more if necessary)
 #
 # Link to video demonstration for final submission:
-# - (insert YouTube / MyMedia / other URL here). Make sure we can view it!
+# - https://play.library.utoronto.ca/07f0a9cdb6cae0766941b9f92b20932a  Make sure we can view it!
 #
 # Are you OK with us sharing the video with people outside course staff?
 # yes, (need an email/user name to send gitHub page to because directory is private)
