@@ -55,6 +55,9 @@
 .eqv d 100
 .eqv p 112
 .eqv pickupSpawnOdds 100 #pickups have a 1/pickupSpawnOdds chance of spawning every tick
+.eqv updateRate 40
+.eqv maxSpeed 2
+.eqv maxAst 5
 .data
 #variable data for colours
 Yellow: .word 0xffff00
@@ -70,16 +73,17 @@ Cyan: .word 0x2aebef
 #variable for position of ship on screen
 shipPos: .word  2064
 #variable for number of asteroids on screen
-asteroidNum: .word  2
-asteroidPos: .word 248:6
+asteroidNum: .word  1
+asteroidPos: .word 248:5
 #variable for speed of asteroids
-asteroidSpeeds: .word 1:6
+asteroidSpeeds: .word 1:5
 #variable for speed cap
-speedCap: .word 2
+speedCap: .word 1
 shipHealth: .word 3
 #score?
 size: .word 3096
 Score: .word 0:5
+
 
 HealthPickupPos: .word -1
 ScorePickupPos: .word -1
@@ -98,11 +102,11 @@ init:
 	sw $t0, asteroidNum
 	li $s1, rightEdge
 	li $s0, BASE_ADDRESS # $t0 stores the base address for display
-	li $s2, 0 #load number of seconds survived / 2
-	lw $s2, Score #reset score to 0
 	li $t1, 0xff0000 # $t1 stores the red colour code
 	li $t2, 0x00ff00 # $t2 stores the green colour code
 	li $t3, 0x0000ff # $t3 stores the blue colour code
+	
+	li $s2, 0 #register for number of ticks passed
 	#resettting ship pos
 	jal resetShip 
 	jal resetHealth
@@ -126,7 +130,7 @@ loop:
 	#update game state
 	#redraw
 	
-	
+	addi $s2, $s2, 1 #one tick has passed	
 clear:
 	jal ClearScreen	
 	
@@ -213,22 +217,27 @@ manageHealth:
 	jal drawShip
 
 checkDifficulty:
-	#if 10 seconds have passed ( sleep for half a second so 2 * number of sleeps), increase number of asteroids and their potential speed to a max of 6
-	li $t8, 20
-	div $s2, $t8
-	mfhi $t8
-	bnez $t8, endIncrease
+	#if 10 seconds have passed (10,000 ms)
+	li $t8, 10000
+	li $t7, updateRate
+	mult $s2, $t7
+	mflo $t7
+	ble $t7, $t8, endIncrease
 
 increaseDifficulty:
+	li $s2, 0
 	lw $t8, speedCap
 	lw $t9, asteroidNum
-	li $t7, 6
-	#if both have hit their mask do nothing
-	bge $t9, $t7, endIncrease	 	
-	addi $t9, $t9, 1
+	li $t7, maxSpeed
+	#if both have hit their max do nothing
+	bge $t8, $t7, endIncreaseSpeed	 	
 	addi $t8, $t8, 1
-	sw $t9, speedCap
-	sw $t8, asteroidNum
+	sw $t8, speedCap
+endIncreaseSpeed:
+	li $t7, maxAst
+	bge $t9, $t7, endIncrease
+	addi $t9, $t9, 1
+	sw $t9, asteroidNum
 endIncrease:
 
 increaseScore:
@@ -238,9 +247,8 @@ increaseScore:
 	sw $a1, 16($a0)
 	jal updateScore
 	
-sleep:	li $a0, 500	
+sleep:	li $a0, updateRate	
 	li $v0, 32 
-	addi $s2, $s2, 1
 	syscall
 	j loop
 
@@ -626,7 +634,7 @@ HealthPickupCollision:
 	abs $v0, $v0
 	li $v1, 1
 	
-	bgt $v0, $v1, HealthCollision
+	bgt $v0, $v1, endHealthCollision
 	
 	#check if collided on x axis by modulus by rowsize and seeing if their difference is within 4
 	li $v0, rightEdge
@@ -639,7 +647,7 @@ HealthPickupCollision:
 	
 	sub $v0, $v1, $v0
 	abs $v0, $v0
-	li $v1, 4
+	li $v1, 8
 	ble $v0, $v1, HealthCollision
 	#if neither condiitons we met, end collision logic
 	j endHealthCollision
@@ -698,7 +706,7 @@ ScorePickupCollision:
 	
 	bgt $v0, $v1, endScoreCollision
 	
-	#check if collided on x axis by modulus by rowsize and seeing if their difference is within 4
+	#check if collided on x axis by modulus by rowsize and seeing if their difference is within 8
 	li $v0, rightEdge
 	div $a1, $v0
 	mfhi $v0
@@ -709,7 +717,7 @@ ScorePickupCollision:
 	
 	sub $v0, $v1, $v0
 	abs $v0, $v0
-	li $v1, 4
+	li $v1, 8
 	ble $v0, $v1, ScoreCollision
 	#if neither condiitons we met, end collision logic
 	j endScoreCollision
